@@ -1,15 +1,47 @@
-# 301 hub, a server that does a bunch of 301 stuff, yay!
+# 301hub, a single that handles all of your http redirects, yay!
+
+# Use cases
+
+- your website is hosted on a dynamic ip, requiring you to have a dns CNAME but preventing you from being able to use an A record for the nexus.  Many AWS ELB/ALB applications fall into this category.
+- your website will be down and you want to redirect temporarily
+- you want to have fun with redirects
 
 
-docker run \
-  -v le_sslcert:/etc/letsencrypt \
-  -e http_proxy=$http_proxy \
-  -e domains="$LE_DOMAIN" \
-  -e email="$LE_EMAIL" \
-  -p 80:80 \
-  -p 443:443 \
-  --rm pierreprinetti/certbot:latest
-  
-  
-  
-https://certbot.eff.org/docs/using.html
+# Conf
+
+Check out conf.example.json which contains two example redirects
+
+```
+{
+"email" : "you@example.com",
+"redirects": 
+    [
+        {
+            "from": "your.awesome.site.com",
+            "to" : "some_other.com"
+        },{
+            "from": "example.com",
+            "to" : "www.example.com"
+        }
+    ]
+}
+```
+
+- your.awesome.site.com gets 301'd to some_other.com
+- example.com gets 301'd to www.example.com
+
+# Getting started
+
+* You'll need a server with a fixed ip, docker and docker-compose with ports 80 and 443 exposed to the internets
+* Create one or more dns A records pointing to your server's ip
+* clone this repository
+* make a conf.json that has the same formatting as the above example.
+* For each A record, create a redirect
+* Make a docker volume called 301hub_sslcerts `docker volume create 301hub_sslcerts` this will contain the ssl certs (duh)
+* `docker-compose build; docker-compose up -d` and voilà
+
+# Additional stuff to know
+* 301hub uses let's encrypt for its SSL certs.  It auto requests them and auto renews them (they expire every 90 days) out of the box.
+* Non valid entries in conf.json will not cause failure, nginx will still come up, but the redirect will not work.  You'll want to check the docker logs `docker-compose logs nginx`
+* Visitors who go to your ip using the ip or a hostname for which there is no redirect will get a big a fat HTTP 500 in their face.
+* the included nginx configuration is meant to be pretty secure and low memory, you can run this on a small cheapo server and not need to worry about firewall stuff.  
