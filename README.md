@@ -1,4 +1,4 @@
-# 301hub, a single that handles all of your http redirects, yay!
+# 301hub, a single that handles all of your http (and https) redirects, yay!
 
 # Use cases
 
