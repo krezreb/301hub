@@ -1,10 +1,10 @@
-# 301hub, a single that handles all of your http (and https) redirects, yay!
+# 301hub, a single place to handle all of your http (and https) redirects, yay!
 
 # Use cases
 
-- your website is hosted on a dynamic ip, requiring you to have a dns CNAME but preventing you from being able to use an A record for the nexus.  Many AWS ELB/ALB applications fall into this category.
+- your website is hosted on a dynamic ip, requiring you to have a dns CNAME but preventing you from being able to use an A record for the nexus.  AWS ELB/ALB applications fall into this category.
 - your website will be down and you want to redirect temporarily
-- you want to have fun with redirects
+- you just think setting up redirects is a thing
 
 
 # Conf
