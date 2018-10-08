@@ -6,8 +6,10 @@ from OpenSSL import crypto
 import datetime
 import shutil
 
+CERTBOT_PORT=8086
+CONF_PATH = '/etc/301hub/conf.json'
 CERT_PATH = '/etc/letsencrypt/live'
-CONF_PATH = '/etc/nginx/conf.d/'
+NGINX_CONF_PATH = '/etc/nginx/conf.d/'
 CERT_EXPIRE_CUTOFF_DAYS = 7
 
 def template(**kwargs):
@@ -16,8 +18,15 @@ def template(**kwargs):
         listen {http_port} ;
         server_name {server_name};
 
+        location /.well-known/acme-challenge {
+            proxy_pass http://127.0.0.1:8086;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+        
         if ($host !~ ^({server_name})$ ) {
-            return 500;
+            return 404;
         }
             
         if ($request_method !~ ^(GET|HEAD|POST)$ )
@@ -35,8 +44,15 @@ def template(**kwargs):
         ssl_certificate {CERT_PATH}/{server_name}/fullchain.pem;
         ssl_certificate_key {CERT_PATH}/{server_name}/privkey.pem;
         
+        location /.well-known/acme-challenge {
+            proxy_pass http://127.0.0.1:8086;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+        
         if ($host !~ ^({server_name})$ ) {
-            return 500;
+            return 404;
         }
             
         if ($request_method !~ ^(GET|HEAD|POST)$ )
@@ -79,7 +95,7 @@ def log(s):
     print(s)
 
 def main():
-    with open('conf.json', 'r') as f:
+    with open(CONF_PATH, 'r') as f:
         conf = json.load(f)
     
     for d in conf["redirects"]:
@@ -110,13 +126,13 @@ def main():
         except:
             email = conf['email']
             
-        cmd = '/usr/bin/certbot certonly --verbose --noninteractive --quiet --standalone --agree-tos --email="{}" '.format(email)
+        cmd = '/usr/bin/certbot certonly --verbose --noninteractive --quiet --standalone  --http-01-port {} --agree-tos --email="{}" '.format(CERTBOT_PORT, email)
         cmd += ' -d "{}"'.format(d['from'])
 
         from2 = d['from'].replace('/', '_')
         nginx_conf = template(http_port=80, https_port=443, server_name=d['from'], forward_to=d['to'])
         
-        conf_file = '{}/{}'.format(CONF_PATH, from2)
+        conf_file = '{}/{}'.format(NGINX_CONF_PATH, from2)
         if os.path.isfile(conf_file):
             os.remove(conf_file)
             
@@ -127,11 +143,11 @@ def main():
             (out, err, exitcode) = run(cmd)
             
             if exitcode != 0:
-                log("Requesting cert for {}: FAILED".format(d['to']))
+                log("Requesting cert for {}: FAILED".format(d['from']))
                 log(cmd)
                 log(err)
             else:
-                log("Requesting cert for {}: SUCCESS".format(d['to']))
+                log("Requesting cert for {}: SUCCESS".format(d['from']))
                 # write conf
                 with open(conf_file, 'w') as f:
                     f.write(nginx_conf)

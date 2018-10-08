@@ -9,9 +9,10 @@ services:
             - "80:80"
         volumes:
             - 301hub_sslcerts:/etc/letsencrypt/
-
+            - 301hub_conf:/etc/301hub/
 volumes:
     301hub_sslcerts:
         external: true
-    
+    301hub_conf:
+        external: true    
     
