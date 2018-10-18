@@ -1,11 +1,12 @@
 # 301hub, a single place to handle all of your http (and https) redirects, yay!
 
+In a world where everything runs on SSL, something as simple as setting up a redirect requires setting up an entire server.  This project aims to encapsulate all of the gruntwork into an easy to deploy package.
+
 # Use cases
 
 - your website is hosted on a dynamic ip, requiring you to have a dns CNAME but preventing you from being able to use an A record for the nexus.  AWS ELB/ALB applications fall into this category.
 - your website will be down and you want to redirect temporarily
 - you just think setting up redirects is a thing
-
 
 # Conf
 
@@ -30,6 +31,11 @@ Check out conf.example.json which contains two example redirects
 - your.awesome.site.com gets 301'd to some_other.com
 - example.com gets 301'd to www.example.com
 
+# Installation
+
+<code>docker pull jbeeson/301hub</code>
+
+or clone this repo and check out the docker-compose.yml file
 
 # Getting started
 
@@ -52,9 +58,10 @@ Check out conf.example.json which contains two example redirects
 
 # Environment variables
 
-SETUP_REFRESH_FREQUENCY in seconds, how often the setup program will run
-CERT_EXPIRE_CUTOFF_DAYS how many days before the 90 days epiration should the certificats be renewed.  7 by default is good enough for an anlways on server
-CHECK_IP_URL 301 uses this external service to know its public ip.
-MY_HOSTNAME set this to your server's hostname
+
+- `SETUP_REFRESH_FREQUENCY` in seconds, how often the setup program will run, default is once every 24 hours
+- `CERT_EXPIRE_CUTOFF_DAYS` how many days before the 90 days epiration should the certificats be renewed.  7 by default is good enough for an always-on server
+- `CHECK_IP_URL` 301 uses this external service to know its public ip, default is http://ip.42.pl/raw
+- `MY_HOSTNAME` set this to your server's hostname
 
 <img src='301.png'>
