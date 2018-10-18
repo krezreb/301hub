@@ -14,8 +14,9 @@ CONF_PATH = os.environ.get('CONF_PATH', '/etc/301hub/conf.json')
 CERT_PATH = os.environ.get('CERT_PATH', '/etc/letsencrypt/live')
 NGINX_CONF_PATH = os.environ.get('NGINX_CONF_PATH', '/etc/nginx/conf.d/')
 CERT_EXPIRE_CUTOFF_DAYS = int(os.environ.get('CERT_EXPIRE_CUTOFF_DAYS', 7))
-
-MY_IP=''
+CHECK_IP_URL=os.environ.get('CHECK_IP_URL', 'http://ip.42.pl/raw')
+MY_HOSTNAME=os.environ.get('MY_HOSTNAME', None)
+MY_IP=None
 
 def template(**kwargs):
     template = """
@@ -102,14 +103,24 @@ def run(cmd, splitlines=False):
 
 
 def log(s):
-    print(s)
-
+    print("SETUP: {}".format(s))
 
 def get_my_ip():
     global MY_IP
-    if MY_IP == '':
-        MY_IP = urlopen('http://ip.42.pl/raw').read()
+    
+    if MY_IP == None:
+        MY_IP = urlopen(CHECK_IP_URL).read()
+
+        if MY_HOSTNAME != None:
+            ip = socket.gethostbyname(MY_HOSTNAME)
+            if ip != MY_IP:
+                log("CONFIG ERROR: env var MY_HOSTNAME={} which resolves to ip {}. But according to {} my ip is {}".format(MY_HOSTNAME, ip, CHECK_IP_URL, MY_IP))
+                exit(-100)
+                
         log("My ip appears to be {}".format(MY_IP))
+
+    return MY_IP
+
 
 def points_to_me(s):
     get_my_ip()
@@ -131,12 +142,12 @@ def points_to_me(s):
     return (success, domain, ip, MY_IP)
 
 def main():
+    log("Start")
     try:
         with open(CONF_PATH, 'r') as f:
             conf = json.load(f)
     except IOError:
-        log("ERROR: No config file found at {}".format(CONF_PATH))
-        log("QUITTING")
+        log("ERROR: No config file found at {}, quitting".format(CONF_PATH))
         exit(-1)
     
     nginx_reload = False
@@ -149,7 +160,11 @@ def main():
 
         fail = False
         if ip_from == None:
-            log("DNS ERROR: No DNS entry found for {}.  Create an A record pointing to my ip ({}) then rerun setup".format(domain_from, my_ip))
+            if MY_HOSTNAME != None:
+                log("DNS ERROR: No DNS entry found for {}.  Create an A record pointing to my ip ({}), or a CNAME pointing to {} then rerun setup".format(domain_from, my_ip, MY_HOSTNAME))
+            else:
+                log("DNS ERROR: No DNS entry found for {}.  Create an A record pointing to my ip ({}) then rerun setup".format(domain_from, my_ip))
+                
             fail = True
 
         elif not points_to_me_from:
@@ -167,7 +182,7 @@ def main():
             continue
         
         if ip_to == None:
-            log("DNS WARNING: No DNS entry found for {}.  Forwarding from {} will fail.".format(domain_to, domain_from))
+            log("DNS WARNING: No DNS entry found for {}.  Forwarding from {} won't work until a DNS record is created.".format(domain_to, domain_from))
             
         if os.path.isfile(cert_file):
             # cert already exists
@@ -232,6 +247,9 @@ def main():
                 nginx_reload = True
     
     if nginx_reload:
+        log("Reloading nginx")
         run("nginx -s reload")
             
+    log("Done")
+    
 main()

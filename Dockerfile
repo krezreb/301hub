@@ -2,7 +2,7 @@ FROM nginx:mainline-alpine
 
 EXPOSE 80 443
 
-RUN apk add --no-cache bash certbot python
+RUN apk add --no-cache bash certbot python  nginx-mod-http-lua
 
 RUN mkdir -p /sslcert
 
@@ -18,5 +18,7 @@ ADD run.sh /
 RUN chmod +x /usr/local/bin/setup /run.sh
 
 ADD conf.example.json /etc/301hub/
+
+ENV CERTBOT_PORT=8086
 
 CMD ["/run.sh"]

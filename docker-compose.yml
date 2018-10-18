@@ -10,6 +10,8 @@ services:
         volumes:
             - 301hub_sslcerts:/etc/letsencrypt/
             - 301hub_conf:/etc/301hub/
+        environment:
+            - SETUP_REFRESH_FREQUENCY=3600
 volumes:
     301hub_sslcerts:
         external: true

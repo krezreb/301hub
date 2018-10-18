@@ -30,6 +30,7 @@ Check out conf.example.json which contains two example redirects
 - your.awesome.site.com gets 301'd to some_other.com
 - example.com gets 301'd to www.example.com
 
+
 # Getting started
 
 * You'll need a server with a fixed ip, docker and docker-compose with ports 80 and 443 exposed to the internets
@@ -49,5 +50,11 @@ Check out conf.example.json which contains two example redirects
 * the included nginx configuration is meant to be pretty secure and low memory, you can run this on a small cheapo server and not need to worry about firewall stuff.
 * You can manually run setup at any time in a running container to take configuration changes into account and renew any eligible certificates
 
+# Environment variables
+
+SETUP_REFRESH_FREQUENCY in seconds, how often the setup program will run
+CERT_EXPIRE_CUTOFF_DAYS how many days before the 90 days epiration should the certificats be renewed.  7 by default is good enough for an anlways on server
+CHECK_IP_URL 301 uses this external service to know its public ip.
+MY_HOSTNAME set this to your server's hostname
 
 <img src='301.png'>
