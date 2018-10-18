@@ -11,12 +11,11 @@ RUN rm /etc/nginx/nginx.conf
 
 ADD nginx.conf /etc/nginx/
 
-
 RUN mkdir -p /etc/301hub
 
-ADD init.py /
+ADD setup.py /usr/local/bin/setup
 ADD run.sh /
-RUN chmod +x /init.py /run.sh
+RUN chmod +x /usr/local/bin/setup /run.sh
 
 ADD conf.example.json /etc/301hub/
 

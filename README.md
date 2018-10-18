@@ -33,17 +33,21 @@ Check out conf.example.json which contains two example redirects
 # Getting started
 
 * You'll need a server with a fixed ip, docker and docker-compose with ports 80 and 443 exposed to the internets
-* Create one or more dns A records pointing to your server's ip
+* Create one or more dns A records or CNAMEs pointing to your server
 * clone this repository
 * make a conf.json that has the same formatting as the above example.
-* For each A record, create a redirect
+* For each dns record, create a redirect
 * Make a docker volume called 301hub_sslcerts `docker volume create 301hub_sslcerts` this will contain the ssl certs (duh)
 * `docker-compose build; docker-compose up -d` and voilà
 
 # Additional stuff to know
 * 301hub uses let's encrypt for its SSL certs.  It auto requests them and auto renews them (they expire every 90 days) out of the box.
 * Non valid entries in conf.json will not cause failure, nginx will still come up, but the redirect will not work.  You'll want to check the docker logs `docker-compose logs nginx`
+* When you run setup it will check that the "from" domain actually resolves to its self.  It also checks that the "to" field does NOT resolve to its self to avoid inifinite loops
 * Visitors who go to your ip using the ip or a hostname for which there is no redirect will get a big a fat HTTP 500 in their face.
+* nginx is rate limited to 5 requests per second per ip
 * the included nginx configuration is meant to be pretty secure and low memory, you can run this on a small cheapo server and not need to worry about firewall stuff.
+* You can manually run setup at any time in a running container to take configuration changes into account and renew any eligible certificates
+
 
 <img src='301.png'>

@@ -5,12 +5,17 @@ from subprocess import Popen, PIPE
 from OpenSSL import crypto
 import datetime
 import shutil
+from urlparse import urlparse
+from urllib2 import urlopen
+import socket
 
-CERTBOT_PORT=8086
-CONF_PATH = '/etc/301hub/conf.json'
-CERT_PATH = '/etc/letsencrypt/live'
-NGINX_CONF_PATH = '/etc/nginx/conf.d/'
-CERT_EXPIRE_CUTOFF_DAYS = 7
+CERTBOT_PORT=os.environ.get('CERTBOT_PORT', '8086')
+CONF_PATH = os.environ.get('CONF_PATH', '/etc/301hub/conf.json')
+CERT_PATH = os.environ.get('CERT_PATH', '/etc/letsencrypt/live')
+NGINX_CONF_PATH = os.environ.get('NGINX_CONF_PATH', '/etc/nginx/conf.d/')
+CERT_EXPIRE_CUTOFF_DAYS = int(os.environ.get('CERT_EXPIRE_CUTOFF_DAYS', 7))
+
+MY_IP=''
 
 def template(**kwargs):
     template = """
@@ -18,8 +23,10 @@ def template(**kwargs):
         listen {http_port} ;
         server_name {server_name};
 
+        limit_req zone=mylimit;
+
         location /.well-known/acme-challenge {
-            proxy_pass http://127.0.0.1:8086;
+            proxy_pass http://127.0.0.1:{CERTBOT_PORT};
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -39,13 +46,15 @@ def template(**kwargs):
     server {
         listen {https_port} ssl http2;
         server_name {server_name};
+    
+        limit_req zone=mylimit;
 
         ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;
         ssl_certificate {CERT_PATH}/{server_name}/fullchain.pem;
         ssl_certificate_key {CERT_PATH}/{server_name}/privkey.pem;
         
         location /.well-known/acme-challenge {
-            proxy_pass http://127.0.0.1:8086;
+            proxy_pass http://127.0.0.1:{CERTBOT_PORT};
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -67,6 +76,7 @@ def template(**kwargs):
     out = template
 
     out = out.replace(u'{CERT_PATH}', u'{}'.format(CERT_PATH))
+    out = out.replace(u'{CERTBOT_PORT}', u'{}'.format(CERTBOT_PORT))
     
     if kwargs is not None:
         for k, v in kwargs.iteritems():
@@ -94,12 +104,51 @@ def run(cmd, splitlines=False):
 def log(s):
     print(s)
 
+
+def get_my_ip():
+    global MY_IP
+    if MY_IP == '':
+        MY_IP = urlopen('http://ip.42.pl/raw').read()
+        log("My ip appears to be {}".format(MY_IP))
+
+def points_to_me(s):
+    get_my_ip()
+    
+    url = 'http://{}'.format(s)
+    # from urlparse import urlparse  # Python 2
+    parsed_uri = urlparse(url)
+    domain = parsed_uri.netloc.split(':')[0]
+    success = False
+    ip = None
+    try:
+        ip = socket.gethostbyname(domain)
+
+        if ip == MY_IP:
+            success = True
+    except Exception as e:
+        log(e)
+        
+    return (success, domain, ip, MY_IP)
+
 def main():
-    with open(CONF_PATH, 'r') as f:
-        conf = json.load(f)
+    try:
+        with open(CONF_PATH, 'r') as f:
+            conf = json.load(f)
+    except IOError:
+        log("ERROR: No config file found at {}".format(CONF_PATH))
+        log("QUITTING")
+        exit(-1)
+    
+    nginx_reload = False
     
     for d in conf["redirects"]:
+        
         cert_file=CERT_PATH+'/'+d['from']+'/cert.pem'
+        (success, domain, ip, my_ip) = points_to_me(d['from'])
+        if ip == None:
+            log("DNS ERROR: No DNS entry found for {}.  Update DNS records and try again".format(domain))
+            continue
+        
         if os.path.isfile(cert_file):
             # cert already exists
             cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(cert_file).read())
@@ -107,26 +156,37 @@ def main():
             
             expires_in = exp - datetime.datetime.utcnow()
             
-            if expires_in.days > 0:
-                log("Found cert {}, expires in {} days".format(d['from'], expires_in.days))
-            else:
+            if expires_in.days <= 0:
                 log("Found cert {} EXPIRED".format(d['from']))
-                
-            if expires_in.days < CERT_EXPIRE_CUTOFF_DAYS:
-                log("Deleting cert {} to force renewal".format(d['from']))
-                # time to renew
-                try:
-                    shutil.rmtree(CERT_PATH+'/'+d['from'])
-                except:
-                    pass
+            else:
+                log("Found cert {}, expires in {} days".format(d['from'], expires_in.days))
+    
+            if not success:
+                log("DNS ERROR: Cannot renew certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and try again".format(domain, ip, my_ip))
+                os.remove(conf_file)
+                nginx_reload = True
+                continue
             
+            if expires_in.days < CERT_EXPIRE_CUTOFF_DAYS:
+                log("Trying to renew cert {}".format(d['from']))
+                cmd = "certbot renew --verbose --noninteractive --standalone  --http-01-port 8086 --agree-tos -d {}".format(d['from'])
+                (out, err, exitcode) = run(cmd)
+                
+                if exitcode == 0:
+                    log("Certificate successfully renewed")
+                    nginx_reload = True
 
+                else:
+                    log("ERROR renewing certificate")
+                    log(out)
+                    log(err)
+                    
         try:
             email = d['email']
-        except:
+        except KeyError:
             email = conf['email']
             
-        cmd = '/usr/bin/certbot certonly --verbose --noninteractive --quiet --standalone  --http-01-port {} --agree-tos --email="{}" '.format(CERTBOT_PORT, email)
+        cmd = 'certbot certonly --verbose --noninteractive --quiet --standalone  --http-01-port {} --agree-tos --email="{}" '.format(CERTBOT_PORT, email)
         cmd += ' -d "{}"'.format(d['from'])
 
         from2 = d['from'].replace('/', '_')
@@ -135,11 +195,19 @@ def main():
         conf_file = '{}/{}'.format(NGINX_CONF_PATH, from2)
         if os.path.isfile(conf_file):
             os.remove(conf_file)
-            
-        #log(nginx_conf)
-        #log(cmd)
-    
+        
+        if not success:
+            log("DNS ERROR: Cannot request certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and try again".format(domain, ip, my_ip))
+            continue
+
+        (matches, domain, ip, my_ip) = points_to_me(d['to'])
+        if matches:
+            log("CONFIG ERROR: Cannot forward {} to {}.  {} routes to my ip, {} which would make an infinite loop".format(domain, ip, domain, my_ip))
+            continue
+        
         if not os.path.isfile(cert_file):
+            lookup(d['from'])
+            
             (out, err, exitcode) = run(cmd)
             
             if exitcode != 0:
@@ -151,9 +219,13 @@ def main():
                 # write conf
                 with open(conf_file, 'w') as f:
                     f.write(nginx_conf)
+                nginx_reload = True
         else:
             # write conf
             with open(conf_file, 'w') as f:
                 f.write(nginx_conf)
+    
+    if nginx_reload:
+        run("nginx -s reload")
             
 main()
