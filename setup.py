@@ -144,22 +144,27 @@ def main():
     for d in conf["redirects"]:
         
         cert_file=CERT_PATH+'/'+d['from']+'/cert.pem'
-        (points_to_me_from, domain, ip, my_ip) = points_to_me(d['from'])
-        (points_to_me_to, domain, ip, my_ip) = points_to_me(d['to'])
+        (points_to_me_from, domain_from, ip_from, my_ip) = points_to_me(d['from'])
+        (points_to_me_to, domain_to, ip_to, my_ip) = points_to_me(d['to'])
 
-        if ip == None:
-            log("DNS ERROR: No DNS entry found for {}.  Update DNS records and rerun setup".format(domain))
-            continue
-        
-        if not points_to_me_from:
-            log("DNS ERROR: Cannot request or renew certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and rerun setup".format(domain, ip, my_ip))
-            if os.path.isfile(cert_file):
-                os.remove(conf_file)
-                nginx_reload = True
-            continue
+        fail = False
+        if ip_from == None:
+            log("DNS ERROR: No DNS entry found for {}.  Update DNS records and rerun setup".format(domain_from))
+            fail = True
 
-        if points_to_me_to:
-            log("CONFIG ERROR: Cannot forward {} to {}.  {} routes to my ip, {} which would make an infinite loop".format(domain, ip, domain, my_ip))
+        elif ip_to == None:
+            log("DNS ERROR: No DNS entry found for {}.  Update DNS records and rerun setup".format(domain_to))
+            fail = True
+                
+        elif not points_to_me_from:
+            log("DNS ERROR: Cannot request or renew certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and rerun setup".format(domain_from, ip_from, my_ip))
+            fail = True
+
+        elif points_to_me_to:
+            log("CONFIG ERROR: Cannot forward {} to {} (ip {}).  This is the same as my ip, which would make an infinite loop.".format(domain_from, domain_to, ip_to))
+            fail = True
+            
+        if fail:
             if os.path.isfile(cert_file):
                 os.remove(conf_file)
                 nginx_reload = True
