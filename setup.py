@@ -149,13 +149,9 @@ def main():
 
         fail = False
         if ip_from == None:
-            log("DNS ERROR: No DNS entry found for {}.  Update DNS records and rerun setup".format(domain_from))
+            log("DNS ERROR: No DNS entry found for {}.  Create an A record pointing to my ip ({}) then rerun setup".format(domain_from, my_ip))
             fail = True
 
-        elif ip_to == None:
-            log("DNS ERROR: No DNS entry found for {}.  Update DNS records and rerun setup".format(domain_to))
-            fail = True
-                
         elif not points_to_me_from:
             log("DNS ERROR: Cannot request or renew certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and rerun setup".format(domain_from, ip_from, my_ip))
             fail = True
@@ -170,6 +166,9 @@ def main():
                 nginx_reload = True
             continue
         
+        if ip_to == None:
+            log("DNS WARNING: No DNS entry found for {}.  Forwarding from {} will fail.".format(domain_to, domain_from))
+            
         if os.path.isfile(cert_file):
             # cert already exists
             cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(cert_file).read())
@@ -225,11 +224,12 @@ def main():
                 # write conf
                 with open(conf_file, 'w') as f:
                     f.write(nginx_conf)
-                nginx_reload = True
+                    nginx_reload = True
         else:
             # write conf
             with open(conf_file, 'w') as f:
                 f.write(nginx_conf)
+                nginx_reload = True
     
     if nginx_reload:
         run("nginx -s reload")
