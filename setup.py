@@ -144,9 +144,25 @@ def main():
     for d in conf["redirects"]:
         
         cert_file=CERT_PATH+'/'+d['from']+'/cert.pem'
-        (success, domain, ip, my_ip) = points_to_me(d['from'])
+        (points_to_me_from, domain, ip, my_ip) = points_to_me(d['from'])
+        (points_to_me_to, domain, ip, my_ip) = points_to_me(d['to'])
+
         if ip == None:
-            log("DNS ERROR: No DNS entry found for {}.  Update DNS records and try again".format(domain))
+            log("DNS ERROR: No DNS entry found for {}.  Update DNS records and rerun setup".format(domain))
+            continue
+        
+        if not points_to_me_from:
+            log("DNS ERROR: Cannot request or renew certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and rerun setup".format(domain, ip, my_ip))
+            if os.path.isfile(cert_file):
+                os.remove(conf_file)
+                nginx_reload = True
+            continue
+
+        if points_to_me_to:
+            log("CONFIG ERROR: Cannot forward {} to {}.  {} routes to my ip, {} which would make an infinite loop".format(domain, ip, domain, my_ip))
+            if os.path.isfile(cert_file):
+                os.remove(conf_file)
+                nginx_reload = True
             continue
         
         if os.path.isfile(cert_file):
@@ -161,23 +177,17 @@ def main():
             else:
                 log("Found cert {}, expires in {} days".format(d['from'], expires_in.days))
     
-            if not success:
-                log("DNS ERROR: Cannot renew certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and try again".format(domain, ip, my_ip))
-                os.remove(conf_file)
-                nginx_reload = True
-                continue
-            
             if expires_in.days < CERT_EXPIRE_CUTOFF_DAYS:
                 log("Trying to renew cert {}".format(d['from']))
                 cmd = "certbot renew --verbose --noninteractive --standalone  --http-01-port 8086 --agree-tos -d {}".format(d['from'])
                 (out, err, exitcode) = run(cmd)
                 
                 if exitcode == 0:
-                    log("Certificate successfully renewed")
+                    log("RENEW SUCCESS: Certificate {} successfully renewed".format(domain))
                     nginx_reload = True
 
                 else:
-                    log("ERROR renewing certificate")
+                    log("RENEW FAIL: ERROR renewing certificate {}".format(domain))
                     log(out)
                     log(err)
                     
@@ -195,15 +205,6 @@ def main():
         conf_file = '{}/{}'.format(NGINX_CONF_PATH, from2)
         if os.path.isfile(conf_file):
             os.remove(conf_file)
-        
-        if not success:
-            log("DNS ERROR: Cannot request certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and try again".format(domain, ip, my_ip))
-            continue
-
-        (matches, domain, ip, my_ip) = points_to_me(d['to'])
-        if matches:
-            log("CONFIG ERROR: Cannot forward {} to {}.  {} routes to my ip, {} which would make an infinite loop".format(domain, ip, domain, my_ip))
-            continue
         
         if not os.path.isfile(cert_file):
             lookup(d['from'])
