@@ -20,5 +20,6 @@ RUN chmod +x /usr/local/bin/setup /run.sh
 ADD conf.example.json /etc/301hub/
 
 ENV CERTBOT_PORT=8086
+ENV SETUP_REFRESH_FREQUENCY=86400
 
 CMD ["/run.sh"]
