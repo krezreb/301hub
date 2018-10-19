@@ -11,7 +11,7 @@ RUN rm /etc/nginx/nginx.conf
 
 ADD nginx.conf /etc/nginx/
 
-RUN mkdir -p /etc/301hub
+RUN mkdir -p /etc/301hub/nginx.conf.d
 
 ADD setup.py /usr/local/bin/setup
 ADD run.sh /

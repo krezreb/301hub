@@ -11,8 +11,8 @@ import socket
 
 CERTBOT_PORT=os.environ.get('CERTBOT_PORT', '8086')
 CONF_PATH = os.environ.get('CONF_PATH', '/etc/301hub/conf.json')
+NGINX_CONF_PATH = os.environ.get('NGINX_CONF_PATH', '/etc/301hub/nginx.conf.d/')
 CERT_PATH = os.environ.get('CERT_PATH', '/etc/letsencrypt/live')
-NGINX_CONF_PATH = os.environ.get('NGINX_CONF_PATH', '/etc/nginx/conf.d/')
 CERT_EXPIRE_CUTOFF_DAYS = int(os.environ.get('CERT_EXPIRE_CUTOFF_DAYS', 7))
 CHECK_IP_URL=os.environ.get('CHECK_IP_URL', 'http://ip.42.pl/raw')
 MY_HOSTNAME=os.environ.get('MY_HOSTNAME', None)
@@ -222,6 +222,8 @@ def main():
         nginx_conf = template(http_port=80, https_port=443, server_name=d['from'], forward_to=d['to'])
         
         conf_file = '{}/{}'.format(NGINX_CONF_PATH, from2)
+        
+        # always remove conf file
         if os.path.isfile(conf_file):
             os.remove(conf_file)
         
@@ -239,11 +241,13 @@ def main():
                 # write conf
                 with open(conf_file, 'w') as f:
                     f.write(nginx_conf)
+                    log("Configured forwarding {} => {}".format(d['from'], d['to']))
                     nginx_reload = True
         else:
             # write conf
             with open(conf_file, 'w') as f:
                 f.write(nginx_conf)
+                log("Configured forwarding {} => {}".format(d['from'], d['to']))
                 nginx_reload = True
     
     if nginx_reload:
