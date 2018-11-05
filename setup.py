@@ -221,15 +221,16 @@ def main():
         from2 = d['from'].replace('/', '_')
         nginx_conf = template(http_port=80, https_port=443, server_name=d['from'], forward_to=d['to'])
         
-        conf_file = '{}/{}'.format(NGINX_CONF_PATH, from2)
+        conf_file = '{}{}'.format(NGINX_CONF_PATH, from2)
+        
+        if not os.path.isdir(NGINX_CONF_PATH):
+            os.makedirs(NGINX_CONF_PATH)
         
         # always remove conf file
         if os.path.isfile(conf_file):
             os.remove(conf_file)
         
         if not os.path.isfile(cert_file):
-            lookup(d['from'])
-            
             (out, err, exitcode) = run(cmd)
             
             if exitcode != 0:
