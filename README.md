@@ -60,7 +60,7 @@ or clone this repo and check out the docker-compose.yml file
 
 
 - `SETUP_REFRESH_FREQUENCY` in seconds, how often the setup program will run, default is once every 24 hours
-- `CERT_EXPIRE_CUTOFF_DAYS` how many days before the 90 days epiration should the certificats be renewed.  7 by default is good enough for an always-on server
+- `CERT_EXPIRE_CUTOFF_DAYS` how many days before the 90 days epiration should the certificats be renewed.  22 by default is good enough for an always-on servern while avoiding the annoying reminders they start to send 20 days before expiration.
 - `CHECK_IP_URL` 301 uses this external service to know its public ip, default is http://ip.42.pl/raw
 - `MY_HOSTNAME` set this to your server's hostname
 
