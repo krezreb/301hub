@@ -202,11 +202,11 @@ def main():
                 (out, err, exitcode) = run(cmd)
                 
                 if exitcode == 0:
-                    log("RENEW SUCCESS: Certificate {} successfully renewed".format(domain))
+                    log("RENEW SUCCESS: Certificate {} successfully renewed".format(d['from']))
                     nginx_reload = True
 
                 else:
-                    log("RENEW FAIL: ERROR renewing certificate {}".format(domain))
+                    log("RENEW FAIL: ERROR renewing certificate {}".format(d['from']))
                     log(out)
                     log(err)
                     
