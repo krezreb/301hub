@@ -41,7 +41,9 @@ def template(**kwargs):
         {
             return 405;
         }
-        return 301 http://{forward_to}$request_uri;
+        location / {
+            return 301 http://{forward_to}$request_uri;
+        }
 
     }
     server {
@@ -69,7 +71,9 @@ def template(**kwargs):
         {
             return 405;
         }
-        return 301 https://{forward_to}$request_uri;
+        location / {
+            return 301 https://{forward_to}$request_uri;
+        }
 
     }
     """
@@ -198,7 +202,7 @@ def main():
     
             if expires_in.days < CERT_EXPIRE_CUTOFF_DAYS:
                 log("Trying to renew cert {}".format(d['from']))
-                cmd = "certbot renew --verbose --noninteractive --standalone  --preferred-challenges http --http-01-port 8086 --agree-tos -d {}".format(d['from'])
+                cmd = "certbot certonly --verbose --noninteractive --preferred-challenges http --standalone --http-01-port 8086 --agree-tos -d {}".format(d['from'])
                 (out, err, exitcode) = run(cmd)
                 
                 if exitcode == 0:
