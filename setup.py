@@ -198,7 +198,7 @@ def main():
     
             if expires_in.days < CERT_EXPIRE_CUTOFF_DAYS:
                 log("Trying to renew cert {}".format(d['from']))
-                cmd = "certbot renew --verbose --noninteractive --standalone  --http-01-port 8086 --agree-tos -d {}".format(d['from'])
+                cmd = "certbot renew --verbose --noninteractive --standalone  --preferred-challenges http --http-01-port 8086 --agree-tos -d {}".format(d['from'])
                 (out, err, exitcode) = run(cmd)
                 
                 if exitcode == 0:
