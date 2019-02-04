@@ -145,6 +145,54 @@ def points_to_me(s):
         
     return (success, domain, ip, MY_IP)
 
+
+def get_le_cert(cert_file, fqdn, cert_email="you@example.com", expire_cutoff_days=31, certbot_port=80):
+    change = False
+    fail = False
+    
+    cmd = "certbot certonly --verbose --noninteractive --preferred-challenges http --standalone --http-01-port {} --agree-tos -d {}".format(certbot_port, fqdn)
+    
+    if os.path.isfile(cert_file):
+        # cert already exists
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(cert_file).read())
+        exp = datetime.datetime.strptime(cert.get_notAfter(), '%Y%m%d%H%M%SZ')
+        
+        expires_in = exp - datetime.datetime.utcnow()
+        
+        if expires_in.days <= 0:
+            log("Found cert {} EXPIRED".format(fqdn))
+        else:
+            log("Found cert {}, expires in {} days".format(fqdn, expires_in.days))
+    
+        if expires_in.days < expire_cutoff_days:
+            log("Trying to renew cert {}".format(fqdn))
+            (out, err, exitcode) = run(cmd)
+            
+            if exitcode == 0:
+                log("RENEW SUCCESS: Certificate {} successfully renewed".format(fqdn))
+                change = True
+    
+            else:
+                log("RENEW FAIL: ERROR renewing certificate {}".format(fqdn))
+                log(out)
+                log(err)
+                fail = True
+    else :
+        cmd += ' --email="{}" '.format(cert_email)
+        (out, err, exitcode) = run(cmd)
+        
+        if exitcode != 0:
+            log("Requesting cert for {}: FAILED".format(fqdn))
+            log(cmd)
+            log(err)
+            fail = True
+
+        else:
+            log("Requesting cert for {}: SUCCESS".format(fqdn))
+            change = True
+    
+    return (change, fail)
+    
 def main():
     log("Start")
     try:
@@ -162,66 +210,6 @@ def main():
         (points_to_me_from, domain_from, ip_from, my_ip) = points_to_me(d['from'])
         (points_to_me_to, domain_to, ip_to, my_ip) = points_to_me(d['to'])
 
-        fail = False
-        if ip_from == None:
-            if MY_HOSTNAME != None:
-                log("DNS ERROR: No DNS entry found for {}.  Create an A record pointing to my ip ({}), or a CNAME pointing to {} then rerun setup".format(domain_from, my_ip, MY_HOSTNAME))
-            else:
-                log("DNS ERROR: No DNS entry found for {}.  Create an A record pointing to my ip ({}) then rerun setup".format(domain_from, my_ip))
-                
-            fail = True
-
-        elif not points_to_me_from:
-            log("DNS ERROR: Cannot request or renew certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and rerun setup".format(domain_from, ip_from, my_ip))
-            fail = True
-
-        elif points_to_me_to:
-            log("CONFIG ERROR: Cannot forward {} to {} (ip {}).  This is the same as my ip, which would make an infinite loop.".format(domain_from, domain_to, ip_to))
-            fail = True
-            
-        if fail:
-            if os.path.isfile(cert_file):
-                os.remove(conf_file)
-                nginx_reload = True
-            continue
-        
-        if ip_to == None:
-            log("DNS WARNING: No DNS entry found for {}.  Forwarding from {} won't work until a DNS record is created.".format(domain_to, domain_from))
-            
-        if os.path.isfile(cert_file):
-            # cert already exists
-            cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(cert_file).read())
-            exp = datetime.datetime.strptime(cert.get_notAfter(), '%Y%m%d%H%M%SZ')
-            
-            expires_in = exp - datetime.datetime.utcnow()
-            
-            if expires_in.days <= 0:
-                log("Found cert {} EXPIRED".format(d['from']))
-            else:
-                log("Found cert {}, expires in {} days".format(d['from'], expires_in.days))
-    
-            if expires_in.days < CERT_EXPIRE_CUTOFF_DAYS:
-                log("Trying to renew cert {}".format(d['from']))
-                cmd = "certbot certonly --verbose --noninteractive --preferred-challenges http --standalone --http-01-port 8086 --agree-tos -d {}".format(d['from'])
-                (out, err, exitcode) = run(cmd)
-                
-                if exitcode == 0:
-                    log("RENEW SUCCESS: Certificate {} successfully renewed".format(d['from']))
-                    nginx_reload = True
-
-                else:
-                    log("RENEW FAIL: ERROR renewing certificate {}".format(d['from']))
-                    log(out)
-                    log(err)
-                    
-        try:
-            email = d['email']
-        except KeyError:
-            email = conf['email']
-            
-        cmd = 'certbot certonly --verbose --noninteractive --quiet --standalone  --http-01-port {} --agree-tos --email="{}" '.format(CERTBOT_PORT, email)
-        cmd += ' -d "{}"'.format(d['from'])
-
         from2 = d['from'].replace('/', '_')
         nginx_conf = template(http_port=80, https_port=443, server_name=d['from'], forward_to=d['to'])
         
@@ -230,26 +218,46 @@ def main():
         if not os.path.isdir(NGINX_CONF_PATH):
             os.makedirs(NGINX_CONF_PATH)
         
-        # always remove conf file
+        # always remove conf file, no matter what 
         if os.path.isfile(conf_file):
             os.remove(conf_file)
+
+        dns_fail = False
+        if ip_to == None:
+            log("DNS WARNING: No DNS entry found for {}.  Forwarding from {} won't work until a DNS record is created.".format(domain_to, domain_from))
+            nginx_reload = True
+            continue
         
-        if not os.path.isfile(cert_file):
-            (out, err, exitcode) = run(cmd)
-            
-            if exitcode != 0:
-                log("Requesting cert for {}: FAILED".format(d['from']))
-                log(cmd)
-                log(err)
+        if ip_from == None:
+            if MY_HOSTNAME != None:
+                log("DNS ERROR: No DNS entry found for {}.  Create an A record pointing to my ip ({}), or a CNAME pointing to {} then rerun setup".format(domain_from, my_ip, MY_HOSTNAME))
             else:
-                log("Requesting cert for {}: SUCCESS".format(d['from']))
-                # write conf
-                with open(conf_file, 'w') as f:
-                    f.write(nginx_conf)
-                    log("Configured forwarding {} => {}".format(d['from'], d['to']))
-                    nginx_reload = True
-        else:
-            # write conf
+                log("DNS ERROR: No DNS entry found for {}.  Create an A record pointing to my ip ({}) then rerun setup".format(domain_from, my_ip))
+                
+            dns_fail = True
+
+        elif not points_to_me_from:
+            log("DNS ERROR: Cannot request or renew certificate for {}.  It points to {} rather than my ip, which is {}.  Update DNS records and rerun setup".format(domain_from, ip_from, my_ip))
+            dns_fail = True
+
+        elif points_to_me_to:
+            log("CONFIG ERROR: Cannot forward {} to {} (ip {}).  This is the same as my ip, which would make an infinite loop.".format(domain_from, domain_to, ip_to))
+            dns_fail = True
+            
+        if dns_fail:
+            nginx_reload = True
+            continue
+        
+        nginx_reload = True
+         
+        try:
+            email = d['email']
+        except KeyError:
+            email = conf['email']
+            
+        (cert_change, cert_fail) = get_le_cert(cert_file, fqdn=d['from'], cert_email=email, expire_cutoff_days=CERT_EXPIRE_CUTOFF_DAYS, certbot_port=CERTBOT_PORT)
+        
+        if not cert_fail:
             with open(conf_file, 'w') as f:
                 f.write(nginx_conf)
                 log("Configured forwarding {} => {}".format(d['from'], d['to']))
