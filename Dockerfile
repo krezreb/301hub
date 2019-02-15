@@ -2,7 +2,7 @@ FROM nginx:mainline-alpine
 
 EXPOSE 80 443
 
-RUN apk add --no-cache bash certbot python  nginx-mod-http-lua
+RUN apk add --no-cache bash certbot python py-openssl nginx-mod-http-lua
 
 RUN mkdir -p /sslcert
 
